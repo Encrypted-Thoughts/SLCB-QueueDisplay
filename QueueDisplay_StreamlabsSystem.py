@@ -1,123 +1,95 @@
-#---------------------------
+#---------------------------------------
 #   Import Libraries
-#---------------------------
-import codecs
-import json
-import os
-import re
+#---------------------------------------
 import sys
+import json
+import codecs
+import os
 
-#---------------------------
+#---------------------------------------
 #   [Required] Script Information
-#---------------------------
+#---------------------------------------
 ScriptName = "Queue Display"
-Website = "https://www.twitch.tv/EncryptedThoughts"
-Description = "Saves queue list to file so to be displayed in a browser source."
+Website = "twitch.tv/encryptedthoughts"
+Description = "A script to populate an overlay showing queue information in an overlay"
 Creator = "EncryptedThoughts"
-Version = "1.0.0.0"
+Version = "1.0.0"
 
-#---------------------------
-#   Define Global Variables
-#---------------------------
+# ---------------------------------------
+#	Set Variables
+# ---------------------------------------
 SettingsFile = os.path.join(os.path.dirname(__file__), "settings.json")
-ReadMe = os.path.join(os.path.dirname(__file__), "README.txt")
+ReadMe = os.path.join(os.path.dirname(__file__), "README.md")
+ScriptSettings = None
 
-#---------------------------------------
-# Classes
-#---------------------------------------
+# ---------------------------------------
+#	Script Classes
+# ---------------------------------------
 class Settings(object):
-    def __init__(self, SettingsFile=None):
-        if SettingsFile and os.path.isfile(SettingsFile):
-            with codecs.open(SettingsFile, encoding="utf-8-sig", mode="r") as f:
-                self.__dict__ = json.load(f, encoding="utf-8")
-        else:
-            self.EnableDebug = True
-            self.QueueFileLocation = os.path.join(os.path.dirname(__file__))
-            Parent.Log(ScriptName, "Failed to read setting from file")
+    def __init__(self, settingsfile=None):
+        with codecs.open(settingsfile, encoding="utf-8-sig", mode="r") as f:
+            self.__dict__ = json.load(f, encoding="utf-8")
 
-    def Reload(self, jsondata):
-        self.__dict__ = json.loads(jsondata, encoding="utf-8")
-        return
+    def Reload(self, jsonData):
+        self.__dict__ = json.loads(jsonData, encoding="utf-8")
 
-    def Save(self, SettingsFile):
-        try:
-            with codecs.open(SettingsFile, encoding="utf-8-sig", mode="w+") as f:
-                json.dump(self.__dict__, f, encoding="utf-8")
-            with codecs.open(SettingsFile.replace("json", "js"), encoding="utf-8-sig", mode="w+") as f:
-                f.write("var settings = {0};".format(json.dumps(self.__dict__, encoding='utf-8')))
-        except:
-            Parent.Log(ScriptName, "Failed to save settings to file.")
-        return
+# ---------------------------------------
+#	Functions
+# ---------------------------------------
+def UpdateQueue():
 
-#---------------------------------------
-# Settings functions
-#---------------------------------------
+    payload = {}
+    queue = Parent.GetQueue(10)
+    count = 1
+    for item in queue:
+        payload[str(count)] = queue[item]
+        count += 1
 
-def ReloadSettings(jsondata):
-    ScriptSettings.Reload(jsondata)
+    Parent.Log(ScriptName, str(payload))
 
-def SaveSettings(self, SettingsFile):
-    with codecs.open(SettingsFile, encoding='utf-8-sig', mode='w+') as f:
-        json.dump(self.__dict__, f, encoding='utf-8-sig')
-    with codecs.open(SettingsFile.replace("json", "js"), encoding='utf-8-sig', mode='w+') as f:
-        f.write("var settings = {0};".format(json.dumps(self.__dict__, encoding='utf-8-sig')))
+    Parent.BroadcastWsEvent("EVENT_QUEUE_UPDATE", json.dumps(payload))
     return
 
-#---------------------------
-#   [Required] Initialize Data (Only called on load)
-#---------------------------
+def ChangeQueueStatus(status):
+    payload = { "status": status }
+    Parent.BroadcastWsEvent("EVENT_QUEUE_STATUS", json.dumps(payload))
+    return
+
+#---------------------------------------
+#   [Required] Initialize Data / Load Only
+#---------------------------------------
 def Init():
     global ScriptSettings
     ScriptSettings = Settings(SettingsFile)
-    ScriptSettings.Save(SettingsFile)
     return
 
-#---------------------------
-#   [Required] Execute Data / Process messages
-#---------------------------
+# ---------------------------------------
+# Chatbot Save Settings Function
+# ---------------------------------------
+def ReloadSettings(jsondata):
+    ScriptSettings.Reload(jsondata)
+    return
+
 def Execute(data):
+
+    if data.IsChatMessage():
+        if "!queue open" in data.Message.lower():
+            if Parent.HasPermission(data.User,"Moderator",""):
+                ChangeQueueStatus("Open")
+        elif "!queue close" in data.Message.lower():
+            if Parent.HasPermission(data.User,"Moderator",""):
+                ChangeQueueStatus("Closed")
+    
+    UpdateQueue();
+
     return
 
-#---------------------------
-#   [Required] Tick method (Gets called during every iteration even when there is no incoming data)
-#---------------------------
 def Tick():
     return
 
-#---------------------------
-#   [Optional] Parse method (Allows you to create your own custom $parameters) 
-#---------------------------
-def Parse(parseString, userid, username, targetid, targetname, message):
-    return parseString
-#---------------------------
-#   [Optional] Reload Settings (Called when a user clicks the Save Settings button in the Chatbot UI)
-#---------------------------
-def ReloadSettings(jsonData):
-    # Execute json reloading here
-    ScriptSettings.__dict__ = json.loads(jsonData)
-    ScriptSettings.Save(SettingsFile)
+# ---------------------------------------
+# Script UI Button Functions
+# ---------------------------------------
+def OpenReadMe():
+    os.startfile(ReadMeFile)
     return
-
-#---------------------------
-#   [Optional] Unload (Called when a user reloads their scripts or closes the bot / cleanup stuff)
-#---------------------------
-def Unload():
-    return
-
-#---------------------------
-#   [Optional] ScriptToggled (Notifies you when a user disables your script or enables it)
-#---------------------------
-def ScriptToggled(state):
-    return
-
-def send_message(message, chatType):
-    if chatType:
-        if chatType == "discord":
-            Parent.SendDiscordMessage(message)
-        else:
-            Parent.SendStreamMessage(message)
-    else:
-        Parent.SendStreamMessage(message)
-
-def openreadme():
-    os.startfile(ReadMe)
